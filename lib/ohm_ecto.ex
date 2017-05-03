@@ -6,6 +6,11 @@ defmodule Ohm.Ecto do
   alias Ohm.Ecto.Utils
 
   @behaviour Ecto.Adapter
+  @behaviour Ecto.Adapter.Storage
+
+  #
+  # Adapter callbacks
+  #
 
   defmacro __before_compile__(_opts), do: :ok
 
@@ -91,6 +96,27 @@ defmodule Ohm.Ecto do
         {:error, :stale}
     end
   end
+
+  #
+  # Storage callbacks
+  #
+
+  def storage_down(_options) do
+    case Redix.command(:redix, ["FLUSHDB"]) do
+      {:ok, _} ->
+        :ok
+      _ ->
+       {:error, :redix_error}
+    end
+  end
+
+  def storage_up(_options) do
+    :ok
+  end
+
+  #
+  # Helper functions
+  #
 
   defp match_get_by_id_query(:all,
     %{wheres: [
