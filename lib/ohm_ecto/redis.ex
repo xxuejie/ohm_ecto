@@ -30,7 +30,21 @@ end
 return next_token
   """
 
+  @delete_lua """
+local key = KEYS[1]
+
+if redis.call('TYPE', key).ok ~= 'hash' then
+  error('not_existed_key')
+end
+
+-- Load all attrs from database first so we can refresh indices if needed
+local attrs = redis.call('HGETALL', key)
+redis.call('DEL', key)
+return cjson.encode(attrs)
+  """
+
   @save_lua_digest :crypto.hash(:sha, @save_lua) |> Base.encode16
+  @delete_lua_digest :crypto.hash(:sha, @delete_lua) |> Base.encode16
 
   def save(key, packed_values, cas_token \\ nil) do
     attr_arg = Poison.encode!(packed_values)
@@ -40,12 +54,8 @@ return next_token
              _ ->
                [attr_arg, cas_token]
            end
-    script(@save_lua, @save_lua_digest, [key], args)
-  end
-
-  defp script(script, digest, keys, args) do
     try do
-      do_script(script, digest, keys, args)
+      script(@save_lua, @save_lua_digest, [key], args)
     rescue
       e in Redix.Error ->
         cond do
@@ -57,7 +67,26 @@ return next_token
     end
   end
 
-  defp do_script(script, digest, keys, args) do
+  def delete(key) do
+    try do
+      case script(@delete_lua, @delete_lua_digest, [key], []) do
+        {:ok, result} ->
+          {:ok, Poison.decode!(result)}
+        error ->
+          error
+      end
+    rescue
+      e in Redix.Error ->
+        cond do
+          String.match?(e.message, ~r/not_existed_key/) ->
+            {:error, :stale}
+          true ->
+            raise e
+        end
+    end
+  end
+
+  defp script(script, digest, keys, args) do
     try do
       Redix.command(:redix, ["EVALSHA", digest, Enum.count(keys)] ++ keys ++ args)
     rescue

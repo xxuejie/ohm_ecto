@@ -92,17 +92,14 @@ defmodule Ohm.Ecto do
 
   def delete(_repo, %{source: {_prefix, table_name}}, filters, _options) do
     key = Utils.a(table_name, Keyword.get(filters, :id))
-    # TODO: move those 2 commmands to a single Redis script for atomic operation
-    case Redix.command(:redix, ["TYPE", key]) do
-      {:ok, "hash"} ->
-        case Redix.command(:redix, ["DEL", key]) do
-          {:ok, _} ->
-            {:ok, filters}
-          {:error, error} ->
-            raise error
-        end
-      _ ->
+    case OhmRedis.delete(key) do
+      {:ok, _} ->
+        # TODO: use the results obtained here to refresh indices
+        {:ok, filters}
+      {:error, :stale} ->
         {:error, :stale}
+      {:error, error} ->
+        raise error
     end
   end
 
