@@ -66,28 +66,16 @@ defmodule Ohm.Ecto do
 
   def insert(_repo, %{source: {_prefix, table_name}}, fields, _on_conflict, _returning, _options) do
     # TODO: returning support, on conflict support, CAS support
-    key = Utils.a(table_name, Keyword.get(fields, :id))
-    case OhmRedis.save(key, packed_values(fields)) do
-      {:ok, _} ->
-        {:ok, fields}
-      {:error, error} ->
-        raise error
-    end
+    save(table_name, Keyword.get(fields, :id), fields)
   end
 
   def insert_all(_, _, _, _, _, _, _), do: raise "Not implemented yet"
 
   def update(_repo, %{source: {_prefix, table_name}}, fields, filters, _returning, _options) do
     # TODO: returning support, on conflict support, CAS support
-    key = Utils.a(table_name, Keyword.get(filters, :id))
     # NOTE: update is exactly insert here, if we want to make sure the model is created before updating,
     # we should use CAS token to validate that.
-    case OhmRedis.save(key, packed_values(fields)) do
-      {:ok, _} ->
-        {:ok, fields}
-      {:error, error} ->
-        raise error
-    end
+    save(table_name, Keyword.get(filters, :id), fields)
   end
 
   def delete(_repo, %{source: {_prefix, table_name}}, filters, _options) do
@@ -123,6 +111,29 @@ defmodule Ohm.Ecto do
   #
   # Helper functions
   #
+
+  defp save(table_name, nil, fields) do
+    save(table_name, generate_id(table_name), fields)
+  end
+
+  defp save(table_name, id, fields) do
+    key = Utils.a(table_name, id)
+    case OhmRedis.save(key, packed_values(fields)) do
+      {:ok, _} ->
+        {:ok, Keyword.put(fields, :id, id)}
+      {:error, error} ->
+        raise error
+    end
+  end
+
+  defp generate_id(table_name) do
+    case Redix.command(:redix, ["INCR", Utils.a(table_name, "_id")]) do
+      {:ok, id} ->
+        id
+      {:error, error} ->
+        raise error
+    end
+  end
 
   defp match_get_by_id_query(:all,
     %{wheres: [
