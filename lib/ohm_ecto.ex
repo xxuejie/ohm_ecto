@@ -25,13 +25,23 @@ defmodule Ohm.Ecto do
     {:ok, []}
   end
 
+  def autogenerate(:id), do: nil
+
+  def autogenerate(:embed_id), do: Ecto.UUID.generate()
+
+  def autogenerate(:binary_id), do: Ecto.UUID.generate()
+
+  def loaders(:uuid, _type), do: [&Ecto.UUID.dump/1]
+
   def loaders(primitive, _type), do: [primitive]
+
+  def dumpers(:uuid, type), do: [type, &Ecto.UUID.load/1]
 
   def dumpers(primitive, _type), do: [primitive]
 
   def prepare(func, query), do: {:nocache, {func, query}}
 
-  def execute(repo, meta, {_cache, {func, query}}, params, preprocess, _options) do
+  def execute(_repo, meta, {_cache, {func, query}}, params, preprocess, _options) do
     case match_get_by_id_query(func, query, params) do
       :not_matched ->
         raise "Query by index is not implemented yet!"
@@ -64,6 +74,8 @@ defmodule Ohm.Ecto do
         raise error
     end
   end
+
+  def insert_all(_, _, _, _, _, _, _), do: raise "Not implemented yet"
 
   def update(_repo, %{source: {_prefix, table_name}}, fields, filters, _returning, _options) do
     # TODO: returning support, on conflict support, CAS support
