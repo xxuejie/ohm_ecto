@@ -3,6 +3,7 @@ defmodule Ohm.Ecto do
   Ecto adapter module for Redis following Ohm patterns.
   """
 
+  alias Ohm.Ecto.Redis, as: OhmRedis
   alias Ohm.Ecto.Utils
 
   @behaviour Ecto.Adapter
@@ -56,7 +57,7 @@ defmodule Ohm.Ecto do
   def insert(_repo, %{source: {_prefix, table_name}}, fields, _on_conflict, _returning, _options) do
     # TODO: returning support, on conflict support, CAS support
     key = Utils.a(table_name, Keyword.get(fields, :id))
-    case Redix.command(:redix, ["HMSET", key | packed_values(fields)]) do
+    case OhmRedis.save(key, packed_values(fields)) do
       {:ok, _} ->
         {:ok, fields}
       {:error, error} ->
