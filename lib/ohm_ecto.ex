@@ -33,9 +33,26 @@ defmodule Ohm.Ecto do
 
   def loaders(:uuid, _type), do: [&Ecto.UUID.dump/1]
 
+  def loaders(:naive_datetime, _type) do
+    [fn(iso8601_datetime) ->
+      Ecto.DateTime.cast(iso8601_datetime)
+    end]
+  end
+
   def loaders(primitive, _type), do: [primitive]
 
   def dumpers(:uuid, type), do: [type, &Ecto.UUID.load/1]
+
+  def dumpers(:naive_datetime, type) do
+    [type, fn(datetime) ->
+      case Ecto.DateTime.cast(datetime) do
+        {:ok, ecto_datetime} ->
+          {:ok, Ecto.DateTime.to_iso8601(ecto_datetime)}
+        error ->
+          error
+      end
+    end]
+  end
 
   def dumpers(primitive, _type), do: [primitive]
 
