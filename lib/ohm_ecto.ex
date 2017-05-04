@@ -80,17 +80,13 @@ defmodule Ohm.Ecto do
   def update(_repo, %{source: {_prefix, table_name}}, fields, filters, _returning, _options) do
     # TODO: returning support, on conflict support, CAS support
     key = Utils.a(table_name, Keyword.get(filters, :id))
-    # TODO: move those 2 commmands to a single Redis script for atomic operation
-    case Redix.command(:redix, ["TYPE", key]) do
-      {:ok, "hash"} ->
-        case Redix.command(:redix, ["HMSET", key | packed_values(fields)]) do
-          {:ok, _} ->
-            {:ok, fields}
-          {:error, error} ->
-            raise error
-        end
-      _ ->
-        {:error, :stale}
+    # NOTE: update is exactly insert here, if we want to make sure the model is created before updating,
+    # we should use CAS token to validate that.
+    case OhmRedis.save(key, packed_values(fields)) do
+      {:ok, _} ->
+        {:ok, fields}
+      {:error, error} ->
+        raise error
     end
   end
 
